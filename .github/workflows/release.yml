@@ -1,4 +1,4 @@
-name: Release APK & Docker Build
+name: Build & Release Android APK
 
 on:
   push:
@@ -8,15 +8,14 @@ on:
 
 permissions:
   contents: write
-  packages: write
 
 jobs:
-  build-and-release:
-    name: Build APK, Docker & Release
+  build-apk:
+    name: Build Android APK & Publish Release
     runs-on: ubuntu-latest
 
     steps:
-      - name: 检出源码 (Checkout repository)
+      - name: 检出源码 (Checkout repo)
         uses: actions/checkout@v4
 
       - name: 提取版本号 (Extract Tag Name)
@@ -25,31 +24,25 @@ jobs:
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           else
-            echo "VERSION=v0.1.0-manual" >> $GITHUB_OUTPUT
+            echo "VERSION=v1.0.0" >> $GITHUB_OUTPUT
           fi
 
-      # -------------------------------------------------------------
-      # 阶段 1: 准备 Node.js 与 Capacitor Android 依赖
-      # -------------------------------------------------------------
-      - name: 设置 Node.js 22 环境
+      - name: 设置 Node.js 环境
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
 
-      - name: 安装 pnpm 并恢复依赖
+      - name: 恢复项目依赖与 Capacitor 资源
         run: |
           npm install -g pnpm@10.15.1
           pnpm install --frozen-lockfile
           pnpm cap sync android
 
-      # -------------------------------------------------------------
-      # 阶段 2: 构建 Android 原生 APK
-      # -------------------------------------------------------------
-      - name: 设置 Java JDK 21 环境
+      - name: 设置 Java JDK 17 环境
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
-          java-version: '21'
+          distribution: 'temurin'
+          java-version: '17'
 
       - name: 设置 Android SDK 构建环境
         uses: android-actions/setup-android@v3
@@ -57,73 +50,28 @@ jobs:
       - name: 赋予 Gradle Wrapper 执行权限
         run: chmod +x android/gradlew
 
-      - name: 执行 Gradle 构建 APK (Debug & Release)
+      - name: 编译 Android APK (Assemble Debug & Release)
         run: |
           cd android
-          # 同时构建 assembleRelease 和 assembleDebug，保证必有立即可用的安装包输出
-          ./gradlew assembleDebug assembleRelease --stacktrace
+          ./gradlew assembleDebug --stacktrace --no-daemon
 
-      - name: 查找、签名与整理 APK 产物
+      - name: 提取并重命名 APK 产物
         run: |
-          mkdir -p release-assets
-          echo "=== 正在全盘扫描生成的 APK 文件 ==="
-          find android/app/build/outputs/apk/ -type f -name "*.apk"
+          mkdir -p apk-output
+          echo "=== 扫描所有已编译的 APK 文件 ==="
+          find android/ -type f -name "*.apk"
 
-          # 自动寻找编译生成的 APK 文件并命名为标准的安装包名称
-          RELEASE_APK=$(find android/app/build/outputs/apk/ -type f -name "*release*.apk" | head -n 1)
-          DEBUG_APK=$(find android/app/build/outputs/apk/ -type f -name "*debug*.apk" | head -n 1)
-
-          if [ -n "$RELEASE_APK" ] && [ -f "$RELEASE_APK" ]; then
-            echo "找到 Release APK: $RELEASE_APK"
-            cp "$RELEASE_APK" "release-assets/OmniImage-Studio-${{ steps.meta.outputs.VERSION }}.apk"
-          elif [ -n "$DEBUG_APK" ] && [ -f "$DEBUG_APK" ]; then
-            echo "找到 Debug APK: $DEBUG_APK"
-            cp "$DEBUG_APK" "release-assets/OmniImage-Studio-${{ steps.meta.outputs.VERSION }}.apk"
+          APK_FILE=$(find android/ -type f -name "*.apk" | head -n 1)
+          if [ -z "$APK_FILE" ]; then
+            echo "错误: 未找到编译生成的 APK 文件！"
+            exit 1
           fi
 
-          echo "=== release-assets 最终目录内容 ==="
-          ls -lh release-assets/
+          echo "找到构建 APK: $APK_FILE"
+          cp "$APK_FILE" "apk-output/OmniImage-Studio-${{ steps.meta.outputs.VERSION }}.apk"
+          ls -lh apk-output/
 
-      # -------------------------------------------------------------
-      # 阶段 3: 构建并推送 Docker 镜像 (GHCR)
-      # -------------------------------------------------------------
-      - name: 设置 Docker Buildx (Set up Docker Buildx)
-        uses: docker/setup-buildx-action@v3
-
-      - name: 登录 GitHub Container Registry (ghcr.io)
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: 构建并推送 Docker 镜像 (Build & Push GHCR)
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.VERSION }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      # -------------------------------------------------------------
-      # 阶段 4: 打包部署包并发布 GitHub Release
-      # -------------------------------------------------------------
-      - name: 打包生产部署轻量文件
-        run: |
-          zip -r release-assets/omni-image-studio-deploy.zip \
-            src public prisma .env.example .npmrc .dockerignore \
-            Dockerfile docker-compose.yml package.json pnpm-lock.yaml \
-            next.config.ts tsconfig.json postcss.config.mjs eslint.config.mjs \
-            nginx.conf capacitor.config.js README.md
-          cp docker-compose.yml release-assets/
-          cp .env.example release-assets/
-          cp nginx.conf release-assets/
-
-      - name: 创建 GitHub Release 并挂载 APK 与 Docker 配置文件
+      - name: 发布至 GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
@@ -132,11 +80,6 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
-          files: |
-            release-assets/*.apk
-            release-assets/omni-image-studio-deploy.zip
-            release-assets/docker-compose.yml
-            release-assets/.env.example
-            release-assets/nginx.conf
+          files: apk-output/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
