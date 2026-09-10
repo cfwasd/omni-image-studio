@@ -17,20 +17,24 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  userScalable: false, // 移动端 App 禁用双指乱缩放，原生 App 级手感
+  userScalable: false,
 };
 
 export const metadata: Metadata = {
   title: "OmniImage Studio - 全象生图工作台",
   description: "多协议兼容、自带提示词智能增强、支持多端云同步的极简专业生图工作台",
   manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "全象生图",
-  },
-  icons: {
-    apple: "/apple-touch-icon.png",
   },
 };
 
@@ -48,6 +52,7 @@ export default function RootLayout({
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <link rel="icon" type="image/svg+xml" href="/icon.svg" />
       </head>
       <body className="min-h-full flex flex-col bg-neutral-950 select-none md:select-auto">{children}</body>
     </html>

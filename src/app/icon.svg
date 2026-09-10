@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7c3aed"/>
+      <stop offset="50%" stop-color="#9333ea"/>
+      <stop offset="100%" stop-color="#c026d3"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#g)"/>
+  <!-- 晶莹四角星光 -->
+  <path d="M32 12 L35.5 26 L49.5 29.5 L35.5 33 L32 47 L28.5 33 L14.5 29.5 L28.5 26 Z" fill="#ffffff"/>
+  <!-- 辅助发光点 -->
+  <circle cx="46" cy="18" r="3.5" fill="#ffffff" opacity="0.9"/>
+  <circle cx="18" cy="46" r="2.5" fill="#ffffff" opacity="0.75"/>
+</svg>
