@@ -28,7 +28,7 @@ jobs:
           fi
 
       # -----------------------------------------------------------------
-      # 阶段 1: 准备 Node.js 与 Capacitor Android 原生代码与插件
+      # 阶段 1: 准备 Node.js 与 Capacitor Android
       # -----------------------------------------------------------------
       - name: 设置 Node.js 22 环境
         uses: actions/setup-node@v4
@@ -56,28 +56,31 @@ jobs:
       - name: 赋予 Gradle Wrapper 执行权限
         run: chmod +x android/gradlew
 
-      - name: 编译 Android APK
+      - name: 编译并生成 APK (同时触发 assembleDebug 与 assembleRelease)
         run: |
           cd android
-          ./gradlew assembleDebug --stacktrace --no-daemon
+          # 明确指定当前 app 模块编译 Debug 与 Release
+          ./gradlew :app:assembleDebug :app:assembleRelease --stacktrace --no-daemon
 
       # -----------------------------------------------------------------
-      # 阶段 3: 提取并重命名 APK 产物
+      # 阶段 3: 全局递归提取 APK 产物并直接发布 GitHub Release
       # -----------------------------------------------------------------
       - name: 提取并重命名 APK 产物
         run: |
           mkdir -p apk-output
-          echo "=== 扫描所有已编译的 APK 文件 ==="
-          find android/ -type f -name "*.apk"
+          echo "=== 正在全盘搜索所有构建产物 .apk ==="
+          find . -type f -name "*.apk" -ls
 
-          APK_FILE=$(find android/ -type f -name "*.apk" | head -n 1)
-          if [ -z "$APK_FILE" ]; then
-            echo "错误: 未找到编译生成的 APK 文件！"
+          # 提取找到的第一个有效 APK 文件
+          APK_FOUND=$(find . -type f -name "*.apk" | head -n 1)
+          if [ -z "$APK_FOUND" ]; then
+            echo "警告: 未检测到 apk 后缀，列出 build 目录所有文件排查:"
+            find android/app/build/ -type f | head -n 30
             exit 1
           fi
 
-          echo "找到构建 APK: $APK_FILE"
-          cp "$APK_FILE" "apk-output/OmniImage-Studio-${{ steps.meta.outputs.VERSION }}.apk"
+          echo "成功命中构建安装包: $APK_FOUND"
+          cp "$APK_FOUND" "apk-output/OmniImage-Studio-${{ steps.meta.outputs.VERSION }}.apk"
           ls -lh apk-output/
 
       - name: 发布至 GitHub Release 附件
