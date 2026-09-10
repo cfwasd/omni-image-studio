@@ -1,0 +1,114 @@
+// Prisma schema for OmniImage Studio
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 用户实体
+model User {
+  id           String                 @id @default(uuid())
+  email        String                 @unique
+  passwordHash String
+  name         String?
+  avatarUrl    String?
+  role         String                 @default("user") // "admin" | "user"
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  providers    ImageProviderConfig[]
+  llmConfig    LLMConfig?
+  tasks        GenerationTask[]
+  artifacts    ImageArtifact[]
+}
+
+// 系统全局配置 (PG连接串覆盖、OSS配置等，方便后台随时更新)
+model SystemSetting {
+  id          String   @id @default("default")
+  key         String   @unique
+  value       String   // JSON string
+  description String?
+  updatedAt   DateTime @updatedAt
+}
+
+// 生图接口提供商配置 (支持绑定多个可用模型 models)
+model ImageProviderConfig {
+  id                String   @id @default(uuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name              String
+  protocolType      String   // "OPENAI" | "SD_WEBUI" | "FAL_AI" | "CUSTOM"
+  baseUrl           String
+  apiKeyEncrypted   String?
+  modelName         String   // 默认模型名称
+  models            String?  // JSON string: 可用模型列表，例如 ["black-forest-labs/FLUX.1-schnell", "black-forest-labs/FLUX.1-dev"]
+  isDefault         Boolean  @default(false)
+  extraHeaders      String?  // JSON string
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// 文本大模型配置 (提示词扩写/翻译)
+model LLMConfig {
+  id                   String   @id @default(uuid())
+  userId               String   @unique
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  baseUrl              String
+  apiKeyEncrypted      String?
+  modelName            String
+  systemPromptTemplate String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+// 生图任务记录
+model GenerationTask {
+  id                      String          @id @default(uuid())
+  userId                  String
+  user                    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskType                String          // "TEXT_TO_IMAGE" | "IMAGE_TO_IMAGE"
+  providerSnapshot        String          // JSON: 快照生成时的接口与模型信息
+  prompt                  String
+  originalPrompt          String?
+  negativePrompt          String?
+  referenceImageUrl       String?
+  parameters              String          // JSON: { width, height, aspectRatio, steps, cfgScale, seed, denoiseStrength, samplerName }
+  status                  String          @default("PENDING") // "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED"
+  errorMessage            String?
+  costTimeMs              Int?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+
+  artifacts               ImageArtifact[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// 生成图片资产实体
+model ImageArtifact {
+  id           String         @id @default(uuid())
+  taskId       String
+  task         GenerationTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storageUrl   String         // OSS / CDN 原图链接
+  thumbnailUrl String?        // OSS / CDN 缩略图链接 (用于画廊秒开)
+  width        Int
+  height       Int
+  fileSize     Int?
+  isFavorited  Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+
+  @@index([userId])
+  @@index([taskId])
+  @@index([isFavorited])
+  @@index([createdAt])
+}

@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  omni-image-studio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: omni-image-studio
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      # 传入手头的 PG 数据库连接串
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:password@host.docker.internal:5432/omni_image?schema=public}
+      - JWT_SECRET=${JWT_SECRET:-omni-image-studio-super-secret-key-2026}
+      # 传入手头的阿里云 OSS 配置（可选，也可在网页端直接配置）
+      - OSS_REGION=${OSS_REGION:-oss-cn-hangzhou}
+      - OSS_ENDPOINT=${OSS_ENDPOINT}
+      - OSS_BUCKET=${OSS_BUCKET}
+      - OSS_ACCESS_KEY_ID=${OSS_ACCESS_KEY_ID}
+      - OSS_ACCESS_KEY_SECRET=${OSS_ACCESS_KEY_SECRET}
+      - OSS_CDN_DOMAIN=${OSS_CDN_DOMAIN}
+      # 传入 LLM 扩写配置
+      - LLM_BASE_URL=${LLM_BASE_URL:-https://api.openai.com/v1}
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
+    extra_hosts:
+      # 允许容器直连宿主机上的本地 PostgreSQL (若 PG 跑在同一台机器上)
+      - "host.docker.internal:host-gateway"

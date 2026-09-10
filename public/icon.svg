@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="omni-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7c3aed" />
+      <stop offset="50%" stop-color="#9333ea" />
+      <stop offset="100%" stop-color="#c026d3" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="url(#omni-grad)" />
+  <path d="M256 120 L275 220 L375 239 L275 258 L256 358 L237 258 L137 239 L237 220 Z" fill="#ffffff" />
+  <circle cx="360" cy="150" r="28" fill="#ffffff" opacity="0.8" />
+  <circle cx="150" cy="360" r="20" fill="#ffffff" opacity="0.6" />
+</svg>
