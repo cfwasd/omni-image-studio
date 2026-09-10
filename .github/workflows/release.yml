@@ -28,7 +28,7 @@ jobs:
           fi
 
       # -----------------------------------------------------------------
-      # 阶段 1: 准备 Node.js 22 环境并生成 Capacitor 资源
+      # 阶段 1: 准备 Node.js 与 Capacitor Android 原生代码与插件
       # -----------------------------------------------------------------
       - name: 设置 Node.js 22 环境
         uses: actions/setup-node@v4
@@ -38,8 +38,8 @@ jobs:
       - name: 恢复依赖并执行 Capacitor Android 同步
         run: |
           npm install -g pnpm@10.15.1
-          pnpm install --frozen-lockfile --node-linker=hoisted
-          pnpm cap sync android
+          pnpm install --no-frozen-lockfile
+          npx cap sync android
 
       # -----------------------------------------------------------------
       # 阶段 2: 设置 Java 21 环境并构建 Android APK
@@ -56,27 +56,27 @@ jobs:
       - name: 赋予 Gradle Wrapper 执行权限
         run: chmod +x android/gradlew
 
-      - name: 编译 Android APK (Assemble Debug & Release)
+      - name: 编译 Android APK
         run: |
           cd android
-          ./gradlew :app:assembleDebug :app:assembleRelease --stacktrace
+          ./gradlew assembleDebug --stacktrace --no-daemon
 
       # -----------------------------------------------------------------
-      # 阶段 3: 全盘提取 APK 并发布 GitHub Release
+      # 阶段 3: 提取并重命名 APK 产物
       # -----------------------------------------------------------------
       - name: 提取并重命名 APK 产物
         run: |
           mkdir -p apk-output
-          echo "=== 正在全盘递归搜索所有生成的 .apk 文件 ==="
-          find . -type f -name "*.apk"
+          echo "=== 扫描所有已编译的 APK 文件 ==="
+          find android/ -type f -name "*.apk"
 
-          APK_FILE=$(find . -type f -name "*.apk" | head -n 1)
+          APK_FILE=$(find android/ -type f -name "*.apk" | head -n 1)
           if [ -z "$APK_FILE" ]; then
-            echo "错误: 未在整个工作区找到任何 .apk 文件！"
+            echo "错误: 未找到编译生成的 APK 文件！"
             exit 1
           fi
 
-          echo "成功定位编译产物: $APK_FILE"
+          echo "找到构建 APK: $APK_FILE"
           cp "$APK_FILE" "apk-output/OmniImage-Studio-${{ steps.meta.outputs.VERSION }}.apk"
           ls -lh apk-output/
 

@@ -1,2 +1,4 @@
-// 移除未使用的 cordova 模块引用，保持现代纯原生构建
+include ':capacitor-cordova-android-plugins'
+project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
+
 apply from: 'capacitor.settings.gradle'

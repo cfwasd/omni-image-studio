@@ -1,0 +1,17 @@
+{
+	"appId": "vip.wangziheng.omniimage",
+	"appName": "OmniImage Studio",
+	"webDir": "public",
+	"server": {
+		"url": "https://image.wangziheng.vip",
+		"cleartext": false,
+		"androidScheme": "https"
+	},
+	"android": {
+		"allowMixedContent": false,
+		"captureInput": true
+	},
+	"ios": {
+		"contentInset": "always"
+	}
+}
