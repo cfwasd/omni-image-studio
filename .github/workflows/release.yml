@@ -11,36 +11,13 @@ permissions:
   packages: write
 
 jobs:
-  # -------------------------------------------------------------
-  # 任务 1: 构建 Android 原生 APK 安装包并签名
-  # -------------------------------------------------------------
-  build-apk:
-    name: Build Android APK
+  build-and-release:
+    name: Build APK, Docker & Release
     runs-on: ubuntu-latest
 
     steps:
       - name: 检出源码 (Checkout repository)
         uses: actions/checkout@v4
-
-      - name: 设置 Node.js 环境
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: 安装 pnpm 并恢复依赖 (安装 @capacitor/android 源码)
-        run: |
-          npm install -g pnpm@10.15.1
-          pnpm install --frozen-lockfile
-          pnpm cap sync android
-
-      - name: 设置 Java JDK 21 环境
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '21'
-
-      - name: 设置 Android SDK 构建环境
-        uses: android-actions/setup-android@v3
 
       - name: 提取版本号 (Extract Tag Name)
         id: meta
@@ -50,6 +27,32 @@ jobs:
           else
             echo "VERSION=v0.1.0-manual" >> $GITHUB_OUTPUT
           fi
+
+      # -------------------------------------------------------------
+      # 阶段 1: 准备 Node.js 与 Capacitor Android 依赖
+      # -------------------------------------------------------------
+      - name: 设置 Node.js 22 环境
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 安装 pnpm 并恢复依赖
+        run: |
+          npm install -g pnpm@10.15.1
+          pnpm install --frozen-lockfile
+          pnpm cap sync android
+
+      # -------------------------------------------------------------
+      # 阶段 2: 构建 Android 原生 APK
+      # -------------------------------------------------------------
+      - name: 设置 Java JDK 21 环境
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+
+      - name: 设置 Android SDK 构建环境
+        uses: android-actions/setup-android@v3
 
       - name: 赋予 Gradle Wrapper 执行权限
         run: chmod +x android/gradlew
@@ -74,50 +77,20 @@ jobs:
 
       - name: 整理并重命名 APK 产物
         run: |
-          mkdir -p build-artifacts
+          mkdir -p release-assets
           if [ -f "${{ steps.sign_app.outputs.signedReleaseFile }}" ]; then
-            cp "${{ steps.sign_app.outputs.signedReleaseFile }}" build-artifacts/OmniImage-Studio-${{ steps.meta.outputs.VERSION }}.apk
+            cp "${{ steps.sign_app.outputs.signedReleaseFile }}" release-assets/OmniImage-Studio-${{ steps.meta.outputs.VERSION }}.apk
           elif [ -f "android/app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
-            cp android/app/build/outputs/apk/release/app-release-unsigned.apk build-artifacts/OmniImage-Studio-${{ steps.meta.outputs.VERSION }}.apk
+            cp android/app/build/outputs/apk/release/app-release-unsigned.apk release-assets/OmniImage-Studio-${{ steps.meta.outputs.VERSION }}.apk
           elif [ -f "android/app/build/outputs/apk/release/app-release.apk" ]; then
-            cp android/app/build/outputs/apk/release/app-release.apk build-artifacts/OmniImage-Studio-${{ steps.meta.outputs.VERSION }}.apk
+            cp android/app/build/outputs/apk/release/app-release.apk release-assets/OmniImage-Studio-${{ steps.meta.outputs.VERSION }}.apk
           fi
-          echo "APK 产物已就绪:"
-          ls -la build-artifacts/
+          echo "Release Assets 准备就绪:"
+          ls -la release-assets/
 
-      - name: 上传 APK 构件 (Upload Artifact)
-        uses: actions/upload-artifact@v4
-        with:
-          name: OmniImage-Studio-APK
-          path: build-artifacts/*.apk
-
-  # -------------------------------------------------------------
-  # 任务 2: 构建 Docker 镜像与发布 GitHub Release
-  # -------------------------------------------------------------
-  build-docker-and-release:
-    name: Build Docker & Create Release
-    needs: build-apk
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: 检出源码 (Checkout repository)
-        uses: actions/checkout@v4
-
-      - name: 提取版本号 (Extract Tag Name)
-        id: meta
-        run: |
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          else
-            echo "VERSION=v0.1.0-manual" >> $GITHUB_OUTPUT
-          fi
-
-      - name: 下载刚才构建的 APK 产物
-        uses: actions/download-artifact@v4
-        with:
-          name: OmniImage-Studio-APK
-          path: release-assets/
-
+      # -------------------------------------------------------------
+      # 阶段 3: 构建并推送 Docker 镜像 (GHCR)
+      # -------------------------------------------------------------
       - name: 设置 Docker Buildx (Set up Docker Buildx)
         uses: docker/setup-buildx-action@v3
 
@@ -140,6 +113,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # -------------------------------------------------------------
+      # 阶段 4: 打包部署包并发布 GitHub Release
+      # -------------------------------------------------------------
       - name: 打包生产部署轻量文件
         run: |
           zip -r release-assets/omni-image-studio-deploy.zip \
