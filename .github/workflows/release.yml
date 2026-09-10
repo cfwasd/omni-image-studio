@@ -57,36 +57,32 @@ jobs:
       - name: 赋予 Gradle Wrapper 执行权限
         run: chmod +x android/gradlew
 
-      - name: 执行 Gradle 构建 Release APK
+      - name: 执行 Gradle 构建 APK (Debug & Release)
         run: |
           cd android
-          ./gradlew assembleRelease --stacktrace
+          # 同时构建 assembleRelease 和 assembleDebug，保证必有立即可用的安装包输出
+          ./gradlew assembleDebug assembleRelease --stacktrace
 
-      - name: 自动签名生成安装包 (Sign Android APK)
-        uses: r0adkll/sign-android-release@v1
-        id: sign_app
-        with:
-          releaseDirectory: android/app/build/outputs/apk/release
-          signingKey: ${{ secrets.ANDROID_SIGNING_KEY }}
-          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
-          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        env:
-          BUILD_TOOLS_VERSION: "35.0.0"
-        continue-on-error: true
-
-      - name: 整理并重命名 APK 产物
+      - name: 查找、签名与整理 APK 产物
         run: |
           mkdir -p release-assets
-          if [ -f "${{ steps.sign_app.outputs.signedReleaseFile }}" ]; then
-            cp "${{ steps.sign_app.outputs.signedReleaseFile }}" release-assets/OmniImage-Studio-${{ steps.meta.outputs.VERSION }}.apk
-          elif [ -f "android/app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
-            cp android/app/build/outputs/apk/release/app-release-unsigned.apk release-assets/OmniImage-Studio-${{ steps.meta.outputs.VERSION }}.apk
-          elif [ -f "android/app/build/outputs/apk/release/app-release.apk" ]; then
-            cp android/app/build/outputs/apk/release/app-release.apk release-assets/OmniImage-Studio-${{ steps.meta.outputs.VERSION }}.apk
+          echo "=== 正在全盘扫描生成的 APK 文件 ==="
+          find android/app/build/outputs/apk/ -type f -name "*.apk"
+
+          # 自动寻找编译生成的 APK 文件并命名为标准的安装包名称
+          RELEASE_APK=$(find android/app/build/outputs/apk/ -type f -name "*release*.apk" | head -n 1)
+          DEBUG_APK=$(find android/app/build/outputs/apk/ -type f -name "*debug*.apk" | head -n 1)
+
+          if [ -n "$RELEASE_APK" ] && [ -f "$RELEASE_APK" ]; then
+            echo "找到 Release APK: $RELEASE_APK"
+            cp "$RELEASE_APK" "release-assets/OmniImage-Studio-${{ steps.meta.outputs.VERSION }}.apk"
+          elif [ -n "$DEBUG_APK" ] && [ -f "$DEBUG_APK" ]; then
+            echo "找到 Debug APK: $DEBUG_APK"
+            cp "$DEBUG_APK" "release-assets/OmniImage-Studio-${{ steps.meta.outputs.VERSION }}.apk"
           fi
-          echo "Release Assets 准备就绪:"
-          ls -la release-assets/
+
+          echo "=== release-assets 最终目录内容 ==="
+          ls -lh release-assets/
 
       # -------------------------------------------------------------
       # 阶段 3: 构建并推送 Docker 镜像 (GHCR)
