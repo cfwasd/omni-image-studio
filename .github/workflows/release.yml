@@ -28,7 +28,7 @@ jobs:
           fi
 
       # -----------------------------------------------------------------
-      # 阶段 1: 准备 Node.js 22 环境并生成 Capacitor 资源与原生插件工程
+      # 阶段 1: 准备 Node.js 22 环境并生成 Capacitor 资源
       # -----------------------------------------------------------------
       - name: 设置 Node.js 22 环境
         uses: actions/setup-node@v4
@@ -38,7 +38,6 @@ jobs:
       - name: 恢复依赖并执行 Capacitor Android 同步
         run: |
           npm install -g pnpm@10.15.1
-          # 设置 node-linker=hoisted 确保 @capacitor/android 在常规 node_modules 目录中扁平化存在
           pnpm install --frozen-lockfile --node-linker=hoisted
           pnpm cap sync android
 
@@ -60,24 +59,24 @@ jobs:
       - name: 编译 Android APK (Assemble Debug & Release)
         run: |
           cd android
-          ./gradlew assembleDebug assembleRelease --stacktrace
+          ./gradlew :app:assembleDebug :app:assembleRelease --stacktrace
 
       # -----------------------------------------------------------------
-      # 阶段 3: 提取 APK 产物并直接发布 GitHub Release
+      # 阶段 3: 全盘提取 APK 并发布 GitHub Release
       # -----------------------------------------------------------------
       - name: 提取并重命名 APK 产物
         run: |
           mkdir -p apk-output
-          echo "=== 正在全盘扫描生成的 APK 文件 ==="
-          find android/ -type f -name "*.apk"
+          echo "=== 正在全盘递归搜索所有生成的 .apk 文件 ==="
+          find . -type f -name "*.apk"
 
-          APK_FILE=$(find android/ -type f -name "*.apk" | head -n 1)
+          APK_FILE=$(find . -type f -name "*.apk" | head -n 1)
           if [ -z "$APK_FILE" ]; then
-            echo "错误: 未找到编译生成的 APK 文件！"
+            echo "错误: 未在整个工作区找到任何 .apk 文件！"
             exit 1
           fi
 
-          echo "找到构建 APK: $APK_FILE"
+          echo "成功定位编译产物: $APK_FILE"
           cp "$APK_FILE" "apk-output/OmniImage-Studio-${{ steps.meta.outputs.VERSION }}.apk"
           ls -lh apk-output/
 
