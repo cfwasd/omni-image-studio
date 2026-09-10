@@ -27,22 +27,29 @@ jobs:
             echo "VERSION=v1.0.0" >> $GITHUB_OUTPUT
           fi
 
-      - name: 设置 Node.js 环境
+      # -----------------------------------------------------------------
+      # 阶段 1: 准备 Node.js 22 环境并生成 Capacitor 资源与原生插件工程
+      # -----------------------------------------------------------------
+      - name: 设置 Node.js 22 环境
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
-      - name: 恢复项目依赖与 Capacitor 资源
+      - name: 恢复依赖并执行 Capacitor Android 同步
         run: |
           npm install -g pnpm@10.15.1
-          pnpm install --frozen-lockfile
+          # 设置 node-linker=hoisted 确保 @capacitor/android 在常规 node_modules 目录中扁平化存在
+          pnpm install --frozen-lockfile --node-linker=hoisted
           pnpm cap sync android
 
-      - name: 设置 Java JDK 17 环境
+      # -----------------------------------------------------------------
+      # 阶段 2: 设置 Java 21 环境并构建 Android APK
+      # -----------------------------------------------------------------
+      - name: 设置 Java JDK 21 环境
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          distribution: 'zulu'
+          java-version: '21'
 
       - name: 设置 Android SDK 构建环境
         uses: android-actions/setup-android@v3
@@ -53,12 +60,15 @@ jobs:
       - name: 编译 Android APK (Assemble Debug & Release)
         run: |
           cd android
-          ./gradlew assembleDebug --stacktrace --no-daemon
+          ./gradlew assembleDebug assembleRelease --stacktrace
 
+      # -----------------------------------------------------------------
+      # 阶段 3: 提取 APK 产物并直接发布 GitHub Release
+      # -----------------------------------------------------------------
       - name: 提取并重命名 APK 产物
         run: |
           mkdir -p apk-output
-          echo "=== 扫描所有已编译的 APK 文件 ==="
+          echo "=== 正在全盘扫描生成的 APK 文件 ==="
           find android/ -type f -name "*.apk"
 
           APK_FILE=$(find android/ -type f -name "*.apk" | head -n 1)
@@ -71,7 +81,7 @@ jobs:
           cp "$APK_FILE" "apk-output/OmniImage-Studio-${{ steps.meta.outputs.VERSION }}.apk"
           ls -lh apk-output/
 
-      - name: 发布至 GitHub Release
+      - name: 发布至 GitHub Release 附件
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
